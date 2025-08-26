@@ -12,8 +12,9 @@ import time
 APP_TITLE = "C.C.E: Counter Criminal Evasion System"
 BG_COLOR = "#212121"
 TEXT_COLOR = "#EAEAEA"
-ACCENT_COLOR = "#4CAF50"  # Green
-ALERT_COLOR = "#F44336"   # Red
+# --- FIX: Changed colors from Hex Strings to BGR Tuples for OpenCV ---
+ACCENT_COLOR = (0, 255, 0)   # Green in BGR
+ALERT_COLOR = (0, 0, 255)    # Red in BGR
 FONT_BOLD = ("Helvetica", 12, "bold")
 FONT_NORMAL = ("Helvetica", 10)
 
@@ -31,7 +32,7 @@ class FaceRecognitionApp:
         
         # --- Load Face Encodings ---
         self.known_data = self.load_encodings("encodings.pickle")
-        self.criminal_list = {"arjun"} # Example criminal list
+        self.criminal_list = {"kshitij"} # Example criminal list
 
         # --- UI Setup ---
         self.create_widgets()
@@ -57,13 +58,13 @@ class FaceRecognitionApp:
         control_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
         control_panel.pack_propagate(False)
 
-        tk.Label(control_panel, text="CONTROL PANEL", fg=ACCENT_COLOR, bg="#2C2C2C", font=FONT_BOLD).pack(pady=10)
+        tk.Label(control_panel, text="CONTROL PANEL", fg="#4CAF50", bg="#2C2C2C", font=FONT_BOLD).pack(pady=10)
 
         # Buttons
-        self.btn_start = tk.Button(control_panel, text="Start System", command=self.start_system, font=FONT_NORMAL, bg=ACCENT_COLOR, fg="white")
+        self.btn_start = tk.Button(control_panel, text="Start System", command=self.start_system, font=FONT_NORMAL, bg="#4CAF50", fg="white")
         self.btn_start.pack(fill=tk.X, padx=10, pady=5)
 
-        self.btn_stop = tk.Button(control_panel, text="Stop System", command=self.stop_system, font=FONT_NORMAL, bg=ALERT_COLOR, fg="white", state=tk.DISABLED)
+        self.btn_stop = tk.Button(control_panel, text="Stop System", command=self.stop_system, font=FONT_NORMAL, bg="#F44336", fg="white", state=tk.DISABLED)
         self.btn_stop.pack(fill=tk.X, padx=10, pady=5)
         
         # Separator
@@ -104,7 +105,7 @@ class FaceRecognitionApp:
         self.is_running = True
         self.btn_start.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
-        self.status_label.config(text="RUNNING", fg=ACCENT_COLOR)
+        self.status_label.config(text="RUNNING", fg="#4CAF50")
         
         self.log_event("System started. Initializing camera...")
         
@@ -136,7 +137,7 @@ class FaceRecognitionApp:
             ret, frame = cap.read()
             if not ret:
                 self.log_event("Failed to grab frame from camera.", "WARNING")
-                time.sleep(0.5)
+                # time.sleep(0.5)
                 continue
 
             # --- INSERT YOUR FACE RECOGNITION LOGIC HERE ---
@@ -146,10 +147,11 @@ class FaceRecognitionApp:
             # Check for criminals and update status
             is_criminal_detected = any(name in self.criminal_list for name in names)
             if is_criminal_detected:
-                self.status_label.config(text="ALERT!", fg=ALERT_COLOR)
-                self.log_event(f"Criminal detected: {[n for n in names if n in self.criminal_list]}", "ALERT")
+                self.status_label.config(text="ALERT!", fg="#F44336")
+                detected_criminals = [n for n in names if n in self.criminal_list]
+                self.log_event(f"Criminal detected: {detected_criminals}", "ALERT")
             else:
-                 self.status_label.config(text="RUNNING", fg=ACCENT_COLOR)
+                 self.status_label.config(text="RUNNING", fg="#4CAF50")
 
             # --- Update UI with the new frame ---
             # Convert the OpenCV frame (BGR) to a PIL Image (RGB)
@@ -200,7 +202,7 @@ class FaceRecognitionApp:
 
             # Set box color
             box_color = ACCENT_COLOR # Green for known
-            if name in self.criminal_list:
+            if name.lower() in self.criminal_list: # Use .lower() for case-insensitive matching
                 box_color = ALERT_COLOR # Red for criminal
             elif name == "Unknown":
                 box_color = (255, 165, 0) # Orange for unknown
@@ -209,9 +211,10 @@ class FaceRecognitionApp:
             cv2.rectangle(frame, (left, top), (right, bottom), box_color, 2)
 
             # Draw a label with a name below the face
-            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), box_color, cv2.FILLED)
             label_font = cv2.FONT_HERSHEY_DUPLEX
-            cv2.putText(frame, name, (left + 6, bottom - 6), label_font, 1.0, (255, 255, 255), 1)
+            (text_width, text_height), baseline = cv2.getTextSize(name, label_font, 0.8, 1)
+            cv2.rectangle(frame, (left, bottom - text_height - 10), (left + text_width + 6, bottom), box_color, cv2.FILLED)
+            cv2.putText(frame, name, (left + 6, bottom - 6), label_font, 0.8, (255, 255, 255), 1)
 
         return frame, detected_names
 
