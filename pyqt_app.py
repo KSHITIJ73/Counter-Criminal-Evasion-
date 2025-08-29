@@ -1,4 +1,3 @@
-
 import sys
 import pickle
 import threading
@@ -28,8 +27,8 @@ class VideoThread(QThread):
     log_signal = pyqtSignal(str, str)
     status_signal = pyqtSignal(str, str)
 
-    def _init_(self, known_data, criminal_list):
-        super()._init_()
+    def __init__(self, known_data, criminal_list):
+        super().__init__()
         self._run_flag = True
         self.known_data = known_data
         self.criminal_list = criminal_list
@@ -131,8 +130,8 @@ class VideoThread(QThread):
 
 # --- Main Application Window ---
 class App(QMainWindow):
-    def _init_(self):
-        super()._init_()
+    def __init__(self):
+        super().__init__()
         self.setWindowTitle(APP_TITLE)
         self.setGeometry(100, 100, 1000, 700)
         self.setStyleSheet("background-color: #212121; color: #EAEAEA;")
@@ -143,4 +142,135 @@ class App(QMainWindow):
         self.initUI()
         self.thread = None
 
+    def load_encodings(self):
+        """Loads face encodings. Exits if not found."""
+        try:
+            with open("encodings.pickle", "rb") as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            # A proper GUI app would use a QMessageBox here.
+            print("[ERROR] encodings.pickle not found. Please run encode_faces.py first.")
+            sys.exit()
+
+    def initUI(self):
+        """Sets up the user interface."""
+        central_widget = QWidget(self)
+        self.setCentralWidget(central_widget)
         
+        main_layout = QHBoxLayout()
+
+        # --- Left Control Panel ---
+        control_panel = QWidget()
+        control_panel.setFixedWidth(250)
+        control_panel.setStyleSheet("background-color: #2C2C2C;")
+        control_layout = QVBoxLayout()
+
+        title_font = QFont("Helvetica", 12, QFont.Weight.Bold)
+        
+        lbl_title = QLabel("CONTROL PANEL")
+        lbl_title.setFont(title_font)
+        lbl_title.setStyleSheet("color: #4CAF50;")
+        control_layout.addWidget(lbl_title, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        self.btn_start = QPushButton("Start System")
+        self.btn_start.setStyleSheet("background-color: #4CAF50; color: white; padding: 5px;")
+        self.btn_start.clicked.connect(self.start_system)
+        control_layout.addWidget(self.btn_start)
+
+        self.btn_stop = QPushButton("Stop System")
+        self.btn_stop.setStyleSheet("background-color: #F44336; color: white; padding: 5px;")
+        self.btn_stop.setEnabled(False)
+        self.btn_stop.clicked.connect(self.stop_system)
+        control_layout.addWidget(self.btn_stop)
+
+        lbl_status_title = QLabel("SYSTEM STATUS")
+        lbl_status_title.setFont(title_font)
+        control_layout.addWidget(lbl_status_title, alignment=Qt.AlignmentFlag.AlignHCenter)
+        
+        self.status_label = QLabel("OFFLINE")
+        status_font = QFont("Helvetica", 14, QFont.Weight.Bold)
+        self.status_label.setFont(status_font)
+        self.status_label.setStyleSheet("color: gray;")
+        control_layout.addWidget(self.status_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        lbl_log_title = QLabel("EVENT LOG")
+        lbl_log_title.setFont(title_font)
+        control_layout.addWidget(lbl_log_title, alignment=Qt.AlignmentFlag.AlignHCenter)
+        
+        self.event_log = QTextEdit()
+        self.event_log.setReadOnly(True)
+        self.event_log.setStyleSheet("background-color: #1A1A1A; color: #EAEAEA; font-family: Consolas;")
+        control_layout.addWidget(self.event_log)
+        
+        control_panel.setLayout(control_layout)
+
+        # --- Right Video Panel ---
+        video_panel = QWidget()
+        video_layout = QVBoxLayout()
+        self.video_label = QLabel("System Offline")
+        self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.video_label.setStyleSheet("background-color: black;")
+        video_layout.addWidget(self.video_label)
+        video_panel.setLayout(video_layout)
+        
+        main_layout.addWidget(control_panel)
+        main_layout.addWidget(video_panel)
+        central_widget.setLayout(main_layout)
+
+    def update_image(self, cv_img):
+        """Updates the video_label with a new opencv image."""
+        qt_img = self.convert_cv_qt(cv_img)
+        self.video_label.setPixmap(qt_img)
+
+    def convert_cv_qt(self, cv_img):
+        """Convert from an opencv image to QPixmap."""
+        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        convert_to_Qt_format = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+        p = convert_to_Qt_format.scaled(self.video_label.width(), self.video_label.height(), Qt.AspectRatioMode.KeepAspectRatio)
+        return QPixmap.fromImage(p)
+
+    def log_event(self, message, level="INFO"):
+        """Appends a message to the event log."""
+        timestamp = time.strftime("%H:%M:%S")
+        self.event_log.append(f"[{timestamp}] [{level}] {message}")
+
+    def update_status(self, text, color):
+        """Updates the system status label."""
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color: {color};")
+
+    def start_system(self):
+        """Starts the video thread."""
+        self.btn_start.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+        self.log_event("System started. Initializing camera...", "INFO")
+        
+        self.thread = VideoThread(self.known_data, self.criminal_list)
+        self.thread.change_pixmap_signal.connect(self.update_image)
+        self.thread.log_signal.connect(self.log_event)
+        self.thread.status_signal.connect(self.update_status)
+        self.thread.start()
+
+    def stop_system(self):
+        """Stops the video thread."""
+        if self.thread:
+            self.thread.stop()
+        self.btn_start.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self.video_label.setText("System Offline")
+        self.video_label.setStyleSheet("background-color: black; color: white;")
+        self.update_status("OFFLINE", "gray")
+
+    def closeEvent(self, event):
+        """Handles the window closing event."""
+        self.stop_system()
+        event.accept()
+
+# --- Main Execution ---
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    a = App()
+    a.show()
+    sys.exit(app.exec())
