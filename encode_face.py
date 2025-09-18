@@ -7,7 +7,18 @@ import os
 # --- Configuration ---
 DATASET_PATH = "dataset"
 ENCODINGS_FILE = "encodings.pickle"
-DETECTION_METHOD = "hog" # or "cnn" for more accuracy (requires dlib with CUDA)
+DETECTION_METHOD = "cnn" # or "cnn" for more accuracy (requires dlib with CUDA)
+def resize_before_encoding(image, width=600):
+    """
+    Resize the image to a given width while maintaining aspect ratio.
+    """
+    (h, w) = image.shape[:2]
+    if w > width:
+        ratio = width / float(w)
+        dim = (width, int(h * ratio))
+        resized = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
+        return resized
+    return image
 
 def encode_faces():
     """
@@ -37,7 +48,9 @@ def encode_faces():
             
             # Load the image and convert it from BGR (OpenCV default) to RGB
             try:
+                # call function to resize image
                 image = cv2.imread(image_path)
+                image = resize_before_encoding(image)
                 if image is None:
                     print(f"[WARNING] Could not read image: {image_path}. Skipping.")
                     continue

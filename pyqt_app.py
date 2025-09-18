@@ -1,4 +1,4 @@
-#Main File, making imposter 
+#main file, making imposter
 import sys
 import pickle
 import threading
@@ -14,8 +14,8 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 # --- Constants and Configuration ---
 APP_TITLE = "C.C.E: Counter Criminal Evasion System (PyQt)"
 # --- BGR Tuples for OpenCV ---
-ACCENT_COLOR = (0, 255, 0)   # Green
-ALERT_COLOR = (0, 0, 255)    # Red
+ACCENT_COLOR = (0, 255, 0) # Green
+ALERT_COLOR = (0, 0, 255) # Red
 
 # --- Video Processing Thread ---
 class VideoThread(QThread):
@@ -28,6 +28,7 @@ class VideoThread(QThread):
     log_signal = pyqtSignal(str, str)
     status_signal = pyqtSignal(str, str)
 
+    # --- FIX: Changed _init_ to __init__ ---
     def __init__(self, known_data, criminal_list):
         super().__init__()
         self._run_flag = True
@@ -91,7 +92,7 @@ class VideoThread(QThread):
         small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
         rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-        self.last_known_locations = face_recognition.face_locations(rgb_small_frame)
+        self.last_known_loactions = face_recognition.face_loactions(rgb_small_frame, model="cnn")
         face_encodings = face_recognition.face_encodings(rgb_small_frame, self.last_known_locations)
 
         current_names = []
@@ -131,6 +132,7 @@ class VideoThread(QThread):
 
 # --- Main Application Window ---
 class App(QMainWindow):
+    # --- FIX: Changed _init_ to __init__ ---
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
@@ -270,8 +272,10 @@ class App(QMainWindow):
         event.accept()
 
 # --- Main Execution ---
+# --- FIX: Changed to use double underscores ---
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     a = App()
     a.show()
     sys.exit(app.exec())
+
