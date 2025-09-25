@@ -1,4 +1,4 @@
-#main file, making imposter
+# Main File, making imposter
 import sys
 import pickle
 import threading
@@ -6,16 +6,15 @@ import time
 import cv2
 import face_recognition
 import numpy as np
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QPushButton, QLabel, QTextEdit)
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QHBoxLayout, QPushButton, QLabel, QTextEdit)
 from PyQt6.QtGui import QImage, QPixmap, QFont
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 # --- Constants and Configuration ---
 APP_TITLE = "C.C.E: Counter Criminal Evasion System (PyQt)"
 # --- BGR Tuples for OpenCV ---
-ACCENT_COLOR = (0, 255, 0) # Green
-ALERT_COLOR = (0, 0, 255) # Red
+ACCENT_COLOR = (0, 255, 0)  # Green
+ALERT_COLOR = (0, 0, 255)   # Red
 
 # --- Video Processing Thread ---
 class VideoThread(QThread):
@@ -49,7 +48,7 @@ class VideoThread(QThread):
             return
 
         self.log_signal.emit("Camera initialized successfully.", "INFO")
-        
+
         while self._run_flag:
             ret, frame = cap.read()
             if not ret:
@@ -58,17 +57,17 @@ class VideoThread(QThread):
                 continue
 
             self.frame_counter += 1
-            
+
             # Process only every Nth frame for performance
             if self.frame_counter % self.process_every_n_frames == 0:
                 self.process_frame(frame)
 
             # Draw results on every frame for a smooth display
             processed_frame = self.draw_on_frame(frame)
-            
+
             # Emit the processed frame to the GUI
             self.change_pixmap_signal.emit(processed_frame)
-            
+
             # Check for criminals and update status
             is_criminal_detected = any(name.lower() in self.criminal_list for name in self.last_known_names)
             if is_criminal_detected:
@@ -92,7 +91,8 @@ class VideoThread(QThread):
         small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
         rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-        self.last_known_loactions = face_recognition.face_loactions(rgb_small_frame, model="cnn")
+        # --- FIX: Corrected typo from loactions to locations ---
+        self.last_known_locations = face_recognition.face_locations(rgb_small_frame, model="hog")
         face_encodings = face_recognition.face_encodings(rgb_small_frame, self.last_known_locations)
 
         current_names = []
@@ -122,7 +122,7 @@ class VideoThread(QThread):
                 box_color = (255, 165, 0)
 
             cv2.rectangle(frame, (left, top), (right, bottom), box_color, 2)
-            
+
             label_font = cv2.FONT_HERSHEY_DUPLEX
             (text_width, text_height), baseline = cv2.getTextSize(name, label_font, 0.8, 1)
             cv2.rectangle(frame, (left, bottom - text_height - 10), (left + text_width + 6, bottom), box_color, cv2.FILLED)
@@ -138,10 +138,10 @@ class App(QMainWindow):
         self.setWindowTitle(APP_TITLE)
         self.setGeometry(100, 100, 1000, 700)
         self.setStyleSheet("background-color: #212121; color: #EAEAEA;")
-        
+
         self.known_data = self.load_encodings()
         self.criminal_list = {"kshitij"}
-        
+
         self.initUI()
         self.thread = None
 
@@ -159,7 +159,7 @@ class App(QMainWindow):
         """Sets up the user interface."""
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
-        
+
         main_layout = QHBoxLayout()
 
         # --- Left Control Panel ---
@@ -189,7 +189,7 @@ class App(QMainWindow):
         lbl_status_title = QLabel("SYSTEM STATUS")
         lbl_status_title.setFont(title_font)
         control_layout.addWidget(lbl_status_title, alignment=Qt.AlignmentFlag.AlignHCenter)
-        
+
         self.status_label = QLabel("OFFLINE")
         status_font = QFont("Helvetica", 14, QFont.Weight.Bold)
         self.status_label.setFont(status_font)
@@ -199,12 +199,12 @@ class App(QMainWindow):
         lbl_log_title = QLabel("EVENT LOG")
         lbl_log_title.setFont(title_font)
         control_layout.addWidget(lbl_log_title, alignment=Qt.AlignmentFlag.AlignHCenter)
-        
+
         self.event_log = QTextEdit()
         self.event_log.setReadOnly(True)
         self.event_log.setStyleSheet("background-color: #1A1A1A; color: #EAEAEA; font-family: Consolas;")
         control_layout.addWidget(self.event_log)
-        
+
         control_panel.setLayout(control_layout)
 
         # --- Right Video Panel ---
@@ -215,7 +215,7 @@ class App(QMainWindow):
         self.video_label.setStyleSheet("background-color: black;")
         video_layout.addWidget(self.video_label)
         video_panel.setLayout(video_layout)
-        
+
         main_layout.addWidget(control_panel)
         main_layout.addWidget(video_panel)
         central_widget.setLayout(main_layout)
@@ -249,7 +249,7 @@ class App(QMainWindow):
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.log_event("System started. Initializing camera...", "INFO")
-        
+
         self.thread = VideoThread(self.known_data, self.criminal_list)
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.log_signal.connect(self.log_event)
@@ -272,10 +272,8 @@ class App(QMainWindow):
         event.accept()
 
 # --- Main Execution ---
-# --- FIX: Changed to use double underscores ---
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     a = App()
     a.show()
     sys.exit(app.exec())
-
