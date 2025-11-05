@@ -1,7 +1,6 @@
 # Main File, making imposter
 import sys
 import pickle
-import threading
 import time
 import cv2
 import face_recognition
@@ -87,25 +86,39 @@ class VideoThread(QThread):
         self.wait()
 
     def process_frame(self, frame):
-        """Processes a single frame for face recognition."""
+        """Processes a single frame for face recognition with improved accuracy."""
+        # Resize for faster processing
         small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
         rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-        # --- FIX: Corrected typo from loactions to locations ---
+        # Detect faces and encode them
         self.last_known_locations = face_recognition.face_locations(rgb_small_frame, model="hog")
         face_encodings = face_recognition.face_encodings(rgb_small_frame, self.last_known_locations)
 
         current_names = []
-        for face_encoding in face_encodings:
-            matches = face_recognition.compare_faces(self.known_data["encodings"], face_encoding, tolerance=0.6)
-            name = "Unknown"
 
-            if True in matches:
-                first_match_index = matches.index(True)
-                name = self.known_data["names"][first_match_index]
-            
+        for face_encoding in face_encodings:
+            # Compute distances between this face and all known encodings
+            distances = face_recognition.face_distance(self.known_data["encodings"], face_encoding)
+
+            if len(distances) == 0:
+                current_names.append("Unknown")
+                continue
+
+            # Find the best match (minimum distance)
+            best_match_index = np.argmin(distances)
+            best_distance = distances[best_match_index]
+
+            # Adjust tolerance dynamically (0.45–0.6)
+            if best_distance < 0.48:
+                name = self.known_data["names"][best_match_index]
+            else:
+                name = "Unknown"
+
             current_names.append(name)
+
         self.last_known_names = current_names
+
 
     def draw_on_frame(self, frame):
         """Draws the last known face locations and names on the frame."""
@@ -140,7 +153,9 @@ class App(QMainWindow):
         self.setStyleSheet("background-color: #212121; color: #EAEAEA;")
 
         self.known_data = self.load_encodings()
-        self.criminal_list = {"kshitij"}
+        self.criminal_list = {
+            "Kshitij",
+           }
 
         self.initUI()
         self.thread = None

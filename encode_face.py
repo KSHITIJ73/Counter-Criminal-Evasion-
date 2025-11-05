@@ -6,11 +6,14 @@ import os
 # --- Configuration ---
 DATASET_PATH = "dataset"
 ENCODINGS_FILE = "encodings.pickle"
-DETECTION_METHOD = "cnn" # or "cnn" for more accuracy (requires dlib with CUDA)
-def resize_before_encoding(image, width=600):
+DETECTION_METHOD = "hog" # or "cnn" for more accuracy (requires dlib with CUDA)
+def resize_before_encoding(image, width=800, height=800):
     """
     Resize the image to a given width while maintaining aspect ratio.
+    Safely returns None if image is None.
     """
+    if image is None:
+        return None
     (h, w) = image.shape[:2]
     if w > width:
         ratio = width / float(w)
@@ -35,7 +38,7 @@ def encode_faces():
     # Loop over each person in the dataset directory
     for person_name in os.listdir(DATASET_PATH):
         person_path = os.path.join(DATASET_PATH, person_name)
-        
+
         # Skip any files that are not directories
         if not os.path.isdir(person_path):
             continue
@@ -44,23 +47,16 @@ def encode_faces():
         # Loop over each image of the person
         for image_name in os.listdir(person_path):
             image_path = os.path.join(person_path, image_name)
-            
-            # Load the image and convert it from BGR (OpenCV default) to RGB
-            try:
-                # call function to resize image
-                image = cv2.imread(image_path)
-                image = resize_before_encoding(image)
-                if image is None:
-                    print(f"[WARNING] Could not read image: {image_path}. Skipping.")
-                    continue
-                rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            except Exception as e:
-                print(f"[ERROR] Failed to process {image_path}. Reason: {e}")
+            image = cv2.imread(image_path)
+            image = resize_before_encoding(image)
+
+            if image is None:
+                print(f"[WARNING] Could not read image: {image_path}. Skipping.")
                 continue
-            
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             # Detect the (x, y)-coordinates of the bounding boxes corresponding to each face
             boxes = face_recognition.face_locations(rgb_image, model=DETECTION_METHOD)
-            
+
             # Compute the facial embedding for the face
             encodings = face_recognition.face_encodings(rgb_image, boxes)
             
@@ -71,13 +67,11 @@ def encode_faces():
                 known_names.append(person_name)
 
     # Save the encodings and names to disk
-    print("[INFO] Serializing encodings...")
+    print(f"[INFO] Encoded {len(known_encodings)} face(s). Saving...")
     data = {"encodings": known_encodings, "names": known_names}
     with open(ENCODINGS_FILE, "wb") as f:
-        f.write(pickle.dumps(data))
-        
-    print(f"[INFO] Encodings saved to '{ENCODINGS_FILE}'.")
-    print(f"Total faces encoded: {len(known_encodings)}")
+        pickle.dump(data, f)
+    print(f"[INFO] Encodings saved to '{ENCODINGS_FILE}'. Process completed.")
 
 # --- Main Execution ---
 if __name__ == "__main__":
