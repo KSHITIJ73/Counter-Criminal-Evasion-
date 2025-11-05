@@ -38,6 +38,7 @@ class VideoThread(QThread):
         self.frame_counter = 0
         self.last_known_locations = []
         self.last_known_names = []
+        self._text_cache = {}
 
     def run(self):
         """The main loop of the video thread."""
@@ -121,26 +122,39 @@ class VideoThread(QThread):
 
 
     def draw_on_frame(self, frame):
-        """Draws the last known face locations and names on the frame."""
-        for (top, right, bottom, left), name in zip(self.last_known_locations, self.last_known_names):
-            top *= 4
-            right *= 4
-            bottom *= 4
-            left *= 4
+        """Fast bounding-box drawing for recognized faces."""
+        if not self.last_known_locations:
+            return frame
 
-            box_color = ACCENT_COLOR
-            if name.lower() in self.criminal_list:
-                box_color = ALERT_COLOR
-            elif name == "Unknown":
-                box_color = (255, 165, 0)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        font_thickness = 1
 
-            cv2.rectangle(frame, (left, top), (right, bottom), box_color, 2)
+        locations = np.array(self.last_known_locations, dtype=np.int32) * 4
+        names = self.last_known_names
 
-            label_font = cv2.FONT_HERSHEY_DUPLEX
-            (text_width, text_height), baseline = cv2.getTextSize(name, label_font, 0.8, 1)
-            cv2.rectangle(frame, (left, bottom - text_height - 10), (left + text_width + 6, bottom), box_color, cv2.FILLED)
-            cv2.putText(frame, name, (left + 6, bottom - 6), label_font, 0.8, (255, 255, 255), 1)
-        
+        new_cache = {}
+        for (top, right, bottom, left), name in zip(locations, names):
+            color = (
+                (0, 0, 255) if name.lower() in self.criminal_list
+                else (0, 165, 255) if name == "Unknown"
+                else (0, 255, 0)
+            )
+
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+
+            if name in self._text_cache:
+                text_width, text_height = self._text_cache[name]
+            else:
+                (text_width, text_height), _ = cv2.getTextSize(name, font, font_scale, font_thickness)
+            new_cache[name] = (text_width, text_height)
+
+            y1 = bottom - text_height - 8
+            y2 = bottom
+            cv2.rectangle(frame, (left, y1), (left + text_width + 8, y2), color, cv2.FILLED)
+            cv2.putText(frame, name, (left + 4, bottom - 4), font, font_scale, (255, 255, 255), font_thickness, cv2.LINE_AA)
+
+        self._text_cache = new_cache
         return frame
 
 # --- Main Application Window ---
