@@ -40,6 +40,9 @@ class VideoThread(QThread):
         self.last_known_names = []
         self._text_cache = {}
 
+        self.ALERT_LOG_INTERVAL_SECONDS = 5.0
+        self.last_alert_log_time = time.time()
+
     def run(self):
         """The main loop of the video thread."""
         cap = cv2.VideoCapture(0)
@@ -73,8 +76,10 @@ class VideoThread(QThread):
             if is_criminal_detected:
                 self.status_signal.emit("ALERT!", "#F44336") # Red
                 detected_criminals = [n for n in self.last_known_names if n.lower() in self.criminal_list]
-                if self.frame_counter % 15 == 0: # Log less frequently
-                    self.log_signal.emit(f"Criminal detected: {detected_criminals}", "ALERT")
+                current_time = time.time()
+                if (current_time - self.last_alert_log_time) >= self.ALERT_LOG_INTERVAL_SECONDS:
+                    self.log_signal.emit(f"CRITICAL ALERT: Identified {', '.join(detected_criminals)} as criminal(s).", "ALERT")
+                    self.last_alert_log_time = current_time # Reset timer "ALERT")
             else:
                 self.status_signal.emit("RUNNING", "#4CAF50") # Green
 
@@ -168,11 +173,14 @@ class App(QMainWindow):
 
         self.known_data = self.load_encodings()
         self.criminal_list = {
-            "Kshitij",
+            "rutvik",
+            "kshitij"
            }
 
         self.initUI()
         self.thread = None
+        self.ALERT_LOG_INTERVAL_SECONDS = 10.0 
+        self.last_alert_log_time = time.time()
 
     def load_encodings(self):
         """Loads face encodings. Exits if not found."""

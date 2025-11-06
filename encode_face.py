@@ -3,7 +3,7 @@ import face_recognition
 import pickle
 import cv2
 import os
-# --- Configuration ---
+#Confi
 DATASET_PATH = "dataset"
 ENCODINGS_FILE = "encodings.pickle"
 DETECTION_METHOD = "hog" # or "cnn" for more accuracy (requires dlib with CUDA)
@@ -18,7 +18,7 @@ def resize_before_encoding(image, width=800, height=800):
     if w > width:
         ratio = width / float(w)
         dim = (width, int(h * ratio))
-        resized = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
+        resized = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)    #inter = downscaling
         return resized
     return image
 
@@ -30,21 +30,20 @@ def encode_faces():
     known_encodings = []
     known_names = []
 
-    # Check if the dataset path exists
+    # Check if DS path exists
     if not os.path.exists(DATASET_PATH):
         print(f"[ERROR] Dataset directory not found at '{DATASET_PATH}'. Please create it and add images.")
         return
 
-    # Loop over each person in the dataset directory
     for person_name in os.listdir(DATASET_PATH):
         person_path = os.path.join(DATASET_PATH, person_name)
 
-        # Skip any files that are not directories
+        # Skip files not in Dir
         if not os.path.isdir(person_path):
             continue
 
         print(f"[INFO] Processing images for '{person_name}'...")
-        # Loop over each image of the person
+        # Loop for each person
         for image_name in os.listdir(person_path):
             image_path = os.path.join(person_path, image_name)
             image = cv2.imread(image_path)
@@ -54,25 +53,25 @@ def encode_faces():
                 print(f"[WARNING] Could not read image: {image_path}. Skipping.")
                 continue
             rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            # Detect the (x, y)-coordinates of the bounding boxes corresponding to each face
+            # Detect coordinates
             boxes = face_recognition.face_locations(rgb_image, model=DETECTION_METHOD)
 
-            # Compute the facial embedding for the face
+            # Embeddings
             encodings = face_recognition.face_encodings(rgb_image, boxes)
             
-            # Loop over the encodings (usually just one per image in our case)
+            # Loop for endcoding
             for encoding in encodings:
-                # Add each encoding + name to our lists
+                # Encoding + name
                 known_encodings.append(encoding)
                 known_names.append(person_name)
 
-    # Save the encodings and names to disk
+    # Save encodings and names
     print(f"[INFO] Encoded {len(known_encodings)} face(s). Saving...")
     data = {"encodings": known_encodings, "names": known_names}
     with open(ENCODINGS_FILE, "wb") as f:
         pickle.dump(data, f)
     print(f"[INFO] Encodings saved to '{ENCODINGS_FILE}'. Process completed.")
 
-# --- Main Execution ---
+#Main Execution
 if __name__ == "__main__":
     encode_faces()
