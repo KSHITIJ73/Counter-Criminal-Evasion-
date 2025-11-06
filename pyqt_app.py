@@ -9,13 +9,13 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QHB
 from PyQt6.QtGui import QImage, QPixmap, QFont
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
-# --- Constants and Configuration ---
+#Const and Config
 APP_TITLE = "C.C.E: Counter Criminal Evasion System (PyQt)"
-# --- BGR Tuples for OpenCV ---
+#BGR Tuples for OpenCV
 ACCENT_COLOR = (0, 255, 0)  # Green
 ALERT_COLOR = (0, 0, 255)   # Red
 
-# --- Video Processing Thread ---
+#Video Processing Thread
 class VideoThread(QThread):
     """
     A dedicated thread to handle video capture and face recognition
@@ -26,22 +26,21 @@ class VideoThread(QThread):
     log_signal = pyqtSignal(str, str)
     status_signal = pyqtSignal(str, str)
 
-    # --- FIX: Changed _init_ to __init__ ---
     def __init__(self, known_data, criminal_list):
-        super().__init__()
-        self._run_flag = True
-        self.known_data = known_data
-        self.criminal_list = criminal_list
+        super().__init__()                                   #Calls QThread
+        self._run_flag = True                           #False for shutting down the thread
+        self.known_data = known_data                    #Will save in Pickle file
+        self.criminal_list = criminal_list              #Alert
         
-        # Optimization variables
-        self.process_every_n_frames = 3
-        self.frame_counter = 0
+        #Optimization vars.
+        self.process_every_n_frames = 3                    
+        self.frame_counter = 0                           #Decides when to run face and increments if req.
         self.last_known_locations = []
         self.last_known_names = []
         self._text_cache = {}
 
         self.ALERT_LOG_INTERVAL_SECONDS = 5.0
-        self.last_alert_log_time = time.time()
+        self.last_alert_log_time = time.time()           #Records the timestamp
 
     def run(self):
         """The main loop of the video thread."""
@@ -53,13 +52,13 @@ class VideoThread(QThread):
         self.log_signal.emit("Camera initialized successfully.", "INFO")
 
         while self._run_flag:
-            ret, frame = cap.read()
+            ret, frame = cap.read()              #ret is a var checks read was successful or not
             if not ret:
                 self.log_signal.emit("Failed to grab frame from camera.", "WARNING")
                 time.sleep(0.5)
                 continue
 
-            self.frame_counter += 1
+            self.frame_counter += 1            #if Fcounter more than 3 then skips.
 
             # Process only every Nth frame for performance
             if self.frame_counter % self.process_every_n_frames == 0:
@@ -68,14 +67,14 @@ class VideoThread(QThread):
             # Draw results on every frame for a smooth display
             processed_frame = self.draw_on_frame(frame)
 
-            # Emit the processed frame to the GUI
+            # Emitting the signals.
             self.change_pixmap_signal.emit(processed_frame)
 
             # Check for criminals and update status
             is_criminal_detected = any(name.lower() in self.criminal_list for name in self.last_known_names)
             if is_criminal_detected:
                 self.status_signal.emit("ALERT!", "#F44336") # Red
-                detected_criminals = [n for n in self.last_known_names if n.lower() in self.criminal_list]
+                detected_criminals = [n for n in self.last_known_names if n.lower() in self.criminal_list]  #Recently recognized faces and present in the criminal list.
                 current_time = time.time()
                 if (current_time - self.last_alert_log_time) >= self.ALERT_LOG_INTERVAL_SECONDS:
                     self.log_signal.emit(f"CRITICAL ALERT: Identified {', '.join(detected_criminals)} as criminal(s).", "ALERT")
@@ -83,7 +82,7 @@ class VideoThread(QThread):
             else:
                 self.status_signal.emit("RUNNING", "#4CAF50") # Green
 
-        cap.release()
+        cap.release()            #Release camera H/W resources
         self.log_signal.emit("Video thread stopped.", "INFO")
 
     def stop(self):
@@ -104,18 +103,18 @@ class VideoThread(QThread):
         current_names = []
 
         for face_encoding in face_encodings:
-            # Compute distances between this face and all known encodings
+            # Compute distances between faces
             distances = face_recognition.face_distance(self.known_data["encodings"], face_encoding)
 
             if len(distances) == 0:
                 current_names.append("Unknown")
                 continue
 
-            # Find the best match (minimum distance)
+            # Find the best match
             best_match_index = np.argmin(distances)
             best_distance = distances[best_match_index]
 
-            # Adjust tolerance dynamically (0.45–0.6)
+            # Adjust tolerance, parameter, max tolerance acceptable for 2 faces for same person. For accuracy and sec.
             if best_distance < 0.48:
                 name = self.known_data["names"][best_match_index]
             else:
@@ -131,11 +130,11 @@ class VideoThread(QThread):
         if not self.last_known_locations:
             return frame
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
+        font = cv2.FONT_HERSHEY_SIMPLEX   #Visuale params like font,etc.
         font_scale = 0.6
         font_thickness = 1
 
-        locations = np.array(self.last_known_locations, dtype=np.int32) * 4
+        locations = np.array(self.last_known_locations, dtype=np.int32) * 4    #For rescaling the co-ordinates
         names = self.last_known_names
 
         new_cache = {}
@@ -146,12 +145,12 @@ class VideoThread(QThread):
                 else (0, 255, 0)
             )
 
-            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)     #Box for face
 
-            if name in self._text_cache:
+            if name in self._text_cache:                                  #Store the calculated size 
                 text_width, text_height = self._text_cache[name]
             else:
-                (text_width, text_height), _ = cv2.getTextSize(name, font, font_scale, font_thickness)
+                (text_width, text_height), _ = cv2.getTextSize(name, font, font_scale, font_thickness)    #Shows the name.
             new_cache[name] = (text_width, text_height)
 
             y1 = bottom - text_height - 8
@@ -162,9 +161,8 @@ class VideoThread(QThread):
         self._text_cache = new_cache
         return frame
 
-# --- Main Application Window ---
+#Main Application Window
 class App(QMainWindow):
-    # --- FIX: Changed _init_ to __init__ ---
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
@@ -179,7 +177,7 @@ class App(QMainWindow):
 
         self.initUI()
         self.thread = None
-        self.ALERT_LOG_INTERVAL_SECONDS = 10.0 
+        self.ALERT_LOG_INTERVAL_SECONDS = 5.0 
         self.last_alert_log_time = time.time()
 
     def load_encodings(self):
@@ -188,7 +186,6 @@ class App(QMainWindow):
             with open("encodings.pickle", "rb") as f:
                 return pickle.load(f)
         except FileNotFoundError:
-            # A proper GUI app would use a QMessageBox here.
             print("[ERROR] encodings.pickle not found. Please run encode_faces.py first.")
             sys.exit()
 
@@ -199,7 +196,7 @@ class App(QMainWindow):
 
         main_layout = QHBoxLayout()
 
-        # --- Left Control Panel ---
+        #Left Control Panel
         control_panel = QWidget()
         control_panel.setFixedWidth(250)
         control_panel.setStyleSheet("background-color: #2C2C2C;")
@@ -244,7 +241,7 @@ class App(QMainWindow):
 
         control_panel.setLayout(control_layout)
 
-        # --- Right Video Panel ---
+        #Right Video Panel
         video_panel = QWidget()
         video_layout = QVBoxLayout()
         self.video_label = QLabel("System Offline")
@@ -308,7 +305,7 @@ class App(QMainWindow):
         self.stop_system()
         event.accept()
 
-# --- Main Execution ---
+#Main Execution
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     a = App()
