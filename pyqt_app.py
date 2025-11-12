@@ -8,6 +8,11 @@ import numpy as np
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QHBoxLayout, QPushButton, QLabel, QTextEdit)
 from PyQt6.QtGui import QImage, QPixmap, QFont
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
+from PyQt6.QtMultimedia import QSoundEffect
+import os
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 
 #Const and Config
 APP_TITLE = "C.C.E: Counter Criminal Evasion System (PyQt)"
@@ -25,6 +30,8 @@ class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
     log_signal = pyqtSignal(str, str)
     status_signal = pyqtSignal(str, str)
+    alert_signal = pyqtSignal()  # trigger alarm sound
+    criminal_detected_signal = pyqtSignal(str, str)
 
     def __init__(self, known_data, criminal_list):
         super().__init__()                                   #Calls QThread
@@ -41,6 +48,9 @@ class VideoThread(QThread):
 
         self.ALERT_LOG_INTERVAL_SECONDS = 5.0
         self.last_alert_log_time = time.time()           #Records the timestamp
+
+        self._last_alert_time = 0
+        self.alert_cooldown = 10                        # seconds
 
     def run(self):
         """The main loop of the video thread."""
@@ -75,7 +85,17 @@ class VideoThread(QThread):
             if is_criminal_detected:
                 self.status_signal.emit("ALERT!", "#F44336") # Red
                 detected_criminals = [n for n in self.last_known_names if n.lower() in self.criminal_list]  #Recently recognized faces and present in the criminal list.
+                if detected_criminals:
+                    criminal_name = detected_criminals[0]
+                    # Assuming first photo in dataset folder is used for popup
+                    image_path = f"dataset/{criminal_name}/1.jpg"
+                    self.criminal_detected_signal.emit(criminal_name, image_path)
                 current_time = time.time()
+                
+                if (current_time - self._last_alert_time) >= self.alert_cooldown:
+                     self.alert_signal.emit()  # trigger alarm sound
+                     self._last_alert_time = current_time
+
                 if (current_time - self.last_alert_log_time) >= self.ALERT_LOG_INTERVAL_SECONDS:
                     self.log_signal.emit(f"CRITICAL ALERT: Identified {', '.join(detected_criminals)} as criminal(s).", "ALERT")
                     self.last_alert_log_time = current_time # Reset timer "ALERT")
@@ -161,6 +181,56 @@ class VideoThread(QThread):
         self._text_cache = new_cache
         return frame
 
+class CriminalAlertPopup(QDialog):
+    """Popup window to display detected criminal info."""
+    def __init__(self, name, image_path, location, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("🚨 Criminal Detected!")
+        self.setModal(True)
+        self.setFixedSize(400, 450)
+        self.setStyleSheet("background-color: #1E1E1E; color: #EAEAEA; border-radius: 10px;")
+
+        layout = QVBoxLayout()
+
+        #Header
+        title = QLabel("⚠️ CRIMINAL DETECTED ⚠️")
+        title.setStyleSheet("color: #F44336; font-size: 18px; font-weight: bold;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        #Photo
+        self.photo_label = QLabel()
+        self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.photo_label.setFixedSize(300, 300)
+        self.photo_label.setStyleSheet("background-color: #111; border: 2px solid #F44336; border-radius: 5px;")
+
+        pixmap = QPixmap(image_path).scaled(
+            self.photo_label.width(), self.photo_label.height(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        self.photo_label.setPixmap(pixmap)
+        layout.addWidget(self.photo_label)
+
+        #Name and Location 
+        name_label = QLabel(f"Name: {name}")
+        name_label.setStyleSheet("color: #F44336; font-size: 16px; font-weight: bold;")
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(name_label)
+
+        location_label = QLabel(f"Location: {location}")
+        location_label.setStyleSheet("color: #4CAF50; font-size: 14px;")
+        location_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(location_label)
+
+        #Close Button
+        close_button = QPushButton("Close Alert")
+        close_button.setStyleSheet("background-color: #2196F3; color: white; font-size: 14px; padding: 6px; border-radius: 6px;")
+        close_button.clicked.connect(self.close)
+        layout.addWidget(close_button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.setLayout(layout)
+
 #Main Application Window
 class App(QMainWindow):
     def __init__(self):
@@ -177,8 +247,11 @@ class App(QMainWindow):
 
         self.initUI()
         self.thread = None
+        self._alarm = None
         self.ALERT_LOG_INTERVAL_SECONDS = 5.0 
         self.last_alert_log_time = time.time()
+        self.shown_criminals = set()  #Track criminals already alerted in current session
+
 
     def load_encodings(self):
         """Loads face encodings. Exits if not found."""
@@ -219,6 +292,12 @@ class App(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_system)
         control_layout.addWidget(self.btn_stop)
+
+        self.btn_stop_alarm = QPushButton("Stop Alarm")
+        self.btn_stop_alarm.setStyleSheet("background-color: #2196F3; color: white; padding: 5px;")
+        self.btn_stop_alarm.setEnabled(False)
+        self.btn_stop_alarm.clicked.connect(self.stop_alarm_sound)
+        control_layout.addWidget(self.btn_stop_alarm)
 
         lbl_status_title = QLabel("SYSTEM STATUS")
         lbl_status_title.setFont(title_font)
@@ -278,6 +357,47 @@ class App(QMainWindow):
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color: {color};")
 
+    def play_alert_sound(self):     #Alarm Sound handler
+        try:
+            sound_path = os.path.abspath("alarm.wav")
+            if not os.path.exists(sound_path):
+                self.log_event(f"alarm.wav not found at {sound_path}", "ERROR")
+                return
+            if self._alarm is None:
+                self._alarm = QSoundEffect()
+                self._alarm.setSource(QUrl.fromLocalFile(sound_path))
+                self._alarm.setLoopCount(1)
+                self._alarm.setVolume(0.9)
+            QTimer.singleShot(200, self._alarm.play)
+            self.btn_stop_alarm.setEnabled(True)
+            self.log_event("Alarm triggered for criminal detection!", "ALERT")
+        except Exception as e:
+            self.log_event(f"Failed to play alert sound: {e}", "ERROR")
+
+    def stop_alarm_sound(self):
+        try:
+            if self._alarm and self._alarm.isPlaying():
+                self._alarm.stop()
+                self.btn_stop_alarm.setEnabled(False)
+                self.log_event("🔇 Alarm manually stopped.", "INFO")
+        except Exception as e:
+            self.log_event(f"Error stopping alarm: {e}", "ERROR")
+
+    def show_criminal_info(self, name, image_path):
+        """Show a popup alert window when a criminal is detected."""
+        try:
+            # 🔴 Avoid repeating the same alert
+            if name.lower() in self.shown_criminals:
+                return  # already shown, skip duplicate popup
+            self.shown_criminals.add(name.lower())
+            location = "Vays 528"  # You can change this per CCTV device
+            popup = CriminalAlertPopup(name, image_path, location, self)
+            popup.show()
+            # Log event
+            self.log_event(f"Popup alert shown for {name}", "ALERT")
+        except Exception as e:
+            self.log_event(f"Error showing criminal popup: {e}", "ERROR")
+
     def start_system(self):
         """Starts the video thread."""
         self.btn_start.setEnabled(False)
@@ -288,17 +408,24 @@ class App(QMainWindow):
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.log_signal.connect(self.log_event)
         self.thread.status_signal.connect(self.update_status)
+        self.thread.alert_signal.connect(self.play_alert_sound)
+        self.thread.criminal_detected_signal.connect(self.show_criminal_info)
         self.thread.start()
 
     def stop_system(self):
         """Stops the video thread."""
         if self.thread:
             self.thread.stop()
+        if self._alarm and self._alarm.isPlaying():  #stop sound if still playing
+            self._alarm.stop()
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
+        self.btn_stop_alarm.setEnabled(False)
         self.video_label.setText("System Offline")
         self.video_label.setStyleSheet("background-color: black; color: white;")
         self.update_status("OFFLINE", "gray")
+        self.shown_criminals.clear()  #Reset popup history when system stops
+
 
     def closeEvent(self, event):
         """Handles the window closing event."""
