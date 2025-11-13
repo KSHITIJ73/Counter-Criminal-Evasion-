@@ -242,7 +242,9 @@ class App(QMainWindow):
         self.known_data = self.load_encodings()
         self.criminal_list = {
             "rutvik",
-            "kshitij"
+            "kshitij",
+            "aditiyan",
+            "anshul"
            }
 
         self.initUI()
