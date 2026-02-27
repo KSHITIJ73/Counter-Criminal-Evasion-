@@ -1,2 +1,6 @@
-venv/
+.venv/
 dataset/
+shape_predictor_68_face_landmarks.dat
+encodings.pickle
+__pycache__/
+*.pyc
