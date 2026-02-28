@@ -1,6 +1,28 @@
+# Virtual environments
 .venv/
-dataset/
-shape_predictor_68_face_landmarks.dat
-encodings.pickle
+venv/
+
+# VS Code
+.vscode/
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Dataset and generated files
+dataset/
+encodings.pickle
+
+# Large model files
+shape_predictor_68_face_landmarks.dat
+
+# Build files
+dist/
+build/
+*.spec
+
+# OS files
+.DS_Store
+Thumbs.db
